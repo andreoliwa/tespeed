@@ -15,6 +15,7 @@ from lxml import etree
 import time
 from math import radians, cos, sin, asin, sqrt
 from StringIO import StringIO
+import logging
 
 
 class CallbackStringIO(StringIO):
@@ -52,7 +53,9 @@ class CallbackStringIO(StringIO):
         if self.num == 0:
             percent = float(down) / (self.total)
             percent = round(percent * 100, 2)
-            print_debug("Uploaded %d of %d bytes (%0.2f%%) in %d threads\r" % (down, self.total, percent, self.thread))
+            print_debug(
+                "Uploaded %d of %d bytes (%0.2f%%) in %d threads\r"
+                % (down, self.total, percent, self.thread))
 
         return next_string
 
@@ -567,8 +570,8 @@ def chunk_report(bytes_so_far, chunk_size, total_size, num, thread, download, w_
         percent = round(percent * 100, 2)
 
         print_debug(
-            "Downloaded %d of %d bytes (%0.2f%%) in %d threads (chunk size=%d)\r" %
-            (down, total_size * thread, percent, thread, chunk_size))
+            "Downloaded %d of %d bytes (%0.2f%%) in %d threads (chunk size=%d)\r"
+            % (down, total_size * thread, percent, thread, chunk_size))
 
 
 def decompress_response(response):
@@ -583,17 +586,37 @@ def decompress_response(response):
 def print_debug(string):
     """
     Print a string for debbuging purposes.
+    Also log the message in a file, if this option was chosen on the command line.
     """
     if not ARGS.suppress:
-        sys.stderr.write(string.encode('utf8'))
+        message = string.encode('utf8')
+        sys.stderr.write(message)
+        log_message(message)
 
 
 def print_result(string):
     """
     Print results in the standard output.
+    Also log the message in a file, if this option was chosen on the command line.
     """
     if ARGS.store:
-        sys.stdout.write(string.encode('utf8'))
+        message = string.encode('utf8')
+        sys.stdout.write(message)
+        log_message(message)
+
+
+def log_message(string):
+    """
+    Log a message if:
+    - it doesn't contain a CARRIAGE RETURN character (\r); and
+    - it's not an empty string.
+    """
+    if '\r' in string:
+        return
+
+    message = string.rstrip()
+    if len(message) > 0:
+        logging.info(message)
 
 
 def main(args):
@@ -602,6 +625,10 @@ def main(args):
     """
     if args.listservers:
         args.store = True
+
+    # Configure the log file, if one was provided on the command line
+    if args.logfile and len(args.logfile):
+        logging.basicConfig(filename=args.logfile, format='%(asctime)s %(message)s', level=logging.INFO)
 
     if not args.listservers and args.server == '' and not args.store:
         print_debug("Getting ready. Use parameter -h or --help to see available features.\n")
@@ -624,7 +651,8 @@ if __name__ == '__main__':
     PARSER.add_argument('-w', '--csv', dest='store', action='store_const', const=True, help='Print CSV formated output to STDOUT.')
     PARSER.add_argument('-s', '--suppress', dest='suppress', action='store_const', const=True, help='Suppress debugging (STDERR) output.')
     PARSER.add_argument('-mib', '--mebibit', dest='unit', action='store_const', const=True, help='Show results in mebibits.')
-    PARSER.add_argument('-n', '--server-count', dest='servercount', nargs='?', default=1, const=1, help='Specify how many different servers should be used in paralel. (Defaults to 1.) (Increase it for >100Mbit testing.)')
+    PARSER.add_argument('-n', '--server-count', dest='servercount', nargs='?', default=1, const=1, help='Specify how many different servers should be used in paralell (defaults to 1). Increase it for >100Mbit testing.')
+    PARSER.add_argument('-l', '--log-file', dest='logfile', help='Save the printed messages in the specified log file.')
 
     ARGS = PARSER.parse_args()
     main(ARGS)
